@@ -1,39 +1,198 @@
-import React, { useState, useEffect } from 'react';
-import Papa from 'papaparse';
-import { 
-  BarChart, Bar, ScatterChart, Scatter, ZAxis,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
-} from 'recharts';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Palm Jebel Ali Properties Dashboard</title>
+  
+  <!-- Load required libraries from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/recharts@2.9.0/umd/Recharts.min.js"></script>
+  
+  <!-- Tailwind CSS for styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f9fafb;
+    }
+    .chart-container {
+      height: 400px;
+      background-color: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .chart-title {
+      font-size: 1.125rem;
+      font-weight: 500;
+      color: #1f2937;
+      margin-bottom: 1rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      background-color: #f3f4f6;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+    }
+    th:hover {
+      background-color: #e5e7eb;
+    }
+    td {
+      padding: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 0.875rem;
+    }
+    tr:nth-child(even) {
+      background-color: #f9fafb;
+    }
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+    }
+    .spinner {
+      width: 3rem;
+      height: 3rem;
+      border: 4px solid #e5e7eb;
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 1rem;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .beach-villa {
+      color: #3b82f6; /* blue */
+    }
+    .coral-villa {
+      color: #ef4444; /* red */
+    }
+    .plots {
+      color: #10b981; /* green */
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Loading spinner shown until data is loaded -->
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <div class="text-xl font-semibold text-blue-600">Loading Palm Jebel Ali Data...</div>
+    </div>
+    
+    <!-- Main content will appear after loading -->
+    <div id="content" class="max-w-7xl mx-auto p-4 sm:p-6" style="display: none;">
+      <!-- Charts Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Average Size by Property Type -->
+        <div class="chart-container">
+          <h3 class="chart-title">Avg. Size by Type</h3>
+          <div id="size-chart" style="width: 100%; height: 350px;"></div>
+        </div>
+        
+        <!-- Average Price by Property Type -->
+        <div class="chart-container">
+          <h3 class="chart-title">Avg. Price by Type</h3>
+          <div id="price-chart" style="width: 100%; height: 350px;"></div>
+        </div>
+      </div>
+      
+      <!-- BUA vs Price Scatter Plot -->
+      <div class="chart-container">
+        <h3 class="chart-title">BUA vs Launch Price</h3>
+        <div id="scatter-chart" style="width: 100%; height: 400px;"></div>
+      </div>
+      
+      <!-- Property Size Ranges -->
+      <div class="chart-container">
+        <h3 class="chart-title">Property Size Ranges</h3>
+        <div id="size-ranges-chart" style="width: 100%; height: 500px;"></div>
+      </div>
+      
+      <!-- Properties Data Table -->
+      <div class="bg-white rounded-lg shadow overflow-hidden mb-8">
+        <div class="overflow-x-auto">
+          <table id="properties-table">
+            <thead>
+              <tr>
+                <th data-key="Layout Name">Layout Name</th>
+                <th data-key="Type">Type</th>
+                <th data-key="Config">Config</th>
+                <th data-key="BUA_Numeric">BUA (sqft)</th>
+                <th data-key="Plot_Numeric">Plot (sqft)</th>
+                <th data-key="Launch_Price_M">Launch Price</th>
+                <th data-key="BUA_PSF_Numeric">BUA PSF</th>
+                <th>Factors</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <!-- Table rows will be inserted here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 py-4" style="display: none;" id="footer">
+      <div class="max-w-7xl mx-auto px-4 text-center">
+        <p class="text-sm text-gray-500">
+          Palm Jebel Ali Property Data • March 2025
+        </p>
+      </div>
+    </footer>
+  </div>
 
-const PalmJebelAliDashboard = () => {
-  const [properties, setProperties] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [typeFilter, setTypeFilter] = useState('All');
-  const [configFilter, setConfigFilter] = useState('All');
-  const [filteredProperties, setFilteredProperties] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: 'Layout Name', direction: 'ascending' });
-  const [propertyTypes, setPropertyTypes] = useState(['All']);
-  const [configTypes, setConfigTypes] = useState(['All']);
-  
-  // Chart data states
-  const [sizeComparisonData, setSizeComparisonData] = useState([]);
-  const [priceComparisonData, setPriceComparisonData] = useState([]);
-  const [scatterPlotData, setScatterPlotData] = useState([]);
-  
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
-  
-  useEffect(() => {
-    const loadData = async () => {
+  <script>
+    // Global variables
+    let properties = [];
+    let filteredProperties = [];
+    let sortConfig = { key: 'Layout Name', direction: 'ascending' };
+    
+    // Colors for charts
+    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+    
+    // Format numbers with commas
+    function formatNumber(num) {
+      if (num === undefined || num === null || isNaN(num)) return '-';
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+    
+    // Load and process the CSV data
+    async function loadData() {
       try {
-        setLoading(true);
-        const response = await window.fs.readFile('Master  PJA Master 1.csv', { encoding: 'utf8' });
-        const parsedData = Papa.parse(response, {
+        // Use data from GitHub (or replace with your CSV URL)
+        // For GitHub, use the raw content URL if you've uploaded your CSV there
+        // For example: https://raw.githubusercontent.com/YOUR-USERNAME/palm-jebel-ali-dashboard/main/data/Master%20%20PJA%20Master%201.csv
+        
+        // If you've uploaded the CSV to the same repository as this HTML file:
+        const response = await fetch('Master  PJA Master 1.csv');
+        const csvText = await response.text();
+        
+        // Parse the CSV data
+        const parsedData = Papa.parse(csvText, {
           header: true,
           skipEmptyLines: true
         });
         
-        // Clean and process the data
+        // Process and clean the data
         const cleanedData = parsedData.data
           .filter(row => row['Type'] && row['Type'].trim() !== '')
           .map(property => {
@@ -85,136 +244,298 @@ const PalmJebelAliDashboard = () => {
               }
             }
             
-            // Clean Plot PSF
-            if (property['Plot PSF (in AED Per sqft)']) {
-              const plotPsf = property['Plot PSF (in AED Per sqft)'].toString();
-              if (plotPsf.includes('-')) {
-                // For ranges, take the average
-                const [min, max] = plotPsf.split('-').map(v => parseFloat(v.replace(/,/g, '').trim()));
-                cleanProperty['Plot_PSF_Numeric'] = (min + max) / 2;
-              } else {
-                const psfValue = plotPsf.replace(/[~,]/g, '').replace(/\s+\(avg\)/g, '');
-                cleanProperty['Plot_PSF_Numeric'] = parseFloat(psfValue);
-              }
-            }
-            
-            // Extract number of bedrooms from Config
-            if (property['Config']) {
-              const bedroomMatch = property['Config'].match(/(\d+)/);
-              if (bedroomMatch) {
-                cleanProperty['Bedrooms'] = parseInt(bedroomMatch[1]);
-              }
-            }
-            
             return cleanProperty;
           });
         
-        setProperties(cleanedData);
-        setFilteredProperties(cleanedData);
+        properties = cleanedData;
+        filteredProperties = cleanedData;
         
-        // Extract unique property types and configs
-        const types = ['All', ...new Set(cleanedData.map(p => p['Type']))];
-        setPropertyTypes(types);
+        // Hide loading and show content
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+        document.getElementById('footer').style.display = 'block';
         
-        const configs = ['All', ...new Set(cleanedData
-          .filter(p => p['Config'])
-          .map(p => p['Config'].trim()))];
-        setConfigTypes(configs);
+        // Initialize all charts and table
+        initializeCharts();
+        renderTable();
         
-        // 1. Size comparison by property type
-        const sizeByType = {};
-        cleanedData.forEach(property => {
-          if (property['Type'] && property['BUA_Numeric']) {
-            if (!sizeByType[property['Type']]) {
-              sizeByType[property['Type']] = {
-                buaTotal: 0,
-                buaCount: 0,
-                plotTotal: 0,
-                plotCount: 0
-              };
-            }
-            
-            sizeByType[property['Type']].buaTotal += property['BUA_Numeric'];
-            sizeByType[property['Type']].buaCount++;
-            
-            if (property['Plot_Numeric']) {
-              sizeByType[property['Type']].plotTotal += property['Plot_Numeric'];
-              sizeByType[property['Type']].plotCount++;
-            }
-          }
-        });
+        // Setup sort event listeners
+        setupSortListeners();
         
-        const sizeData = Object.keys(sizeByType).map(type => ({
-          name: type,
-          avgBUA: Math.round(sizeByType[type].buaTotal / sizeByType[type].buaCount),
-          avgPlot: sizeByType[type].plotCount > 0 ? 
-            Math.round(sizeByType[type].plotTotal / sizeByType[type].plotCount) : 0
-        }));
-        setSizeComparisonData(sizeData);
-        
-        // 2. Price comparison by property type
-        const priceByType = {};
-        cleanedData.forEach(property => {
-          if (property['Type'] && property['Launch_Price_M']) {
-            if (!priceByType[property['Type']]) {
-              priceByType[property['Type']] = {
-                total: 0,
-                count: 0
-              };
-            }
-            
-            priceByType[property['Type']].total += property['Launch_Price_M'];
-            priceByType[property['Type']].count++;
-          }
-        });
-        
-        const priceData = Object.keys(priceByType).map(type => ({
-          name: type,
-          price: Math.round(priceByType[type].total / priceByType[type].count * 10) / 10
-        }));
-        setPriceComparisonData(priceData);
-        
-        // 3. Scatter plot data (BUA vs Price)
-        const scatterData = cleanedData
-          .filter(p => p['BUA_Numeric'] && p['Launch_Price_M'])
-          .map(p => ({
-            name: p['Layout Name'],
-            bua: p['BUA_Numeric'],
-            price: p['Launch_Price_M'],
-            type: p['Type']
-          }));
-        setScatterPlotData(scatterData);
-        
-        setLoading(false);
       } catch (error) {
         console.error("Error loading CSV data:", error);
-        setError("Failed to load property data");
-        setLoading(false);
+        document.getElementById('loading').innerHTML = `
+          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded max-w-md">
+            <p class="font-bold">Error</p>
+            <p>Failed to load property data. Check console for details.</p>
+          </div>
+        `;
       }
-    };
-    
-    loadData();
-  }, []);
-  
-  // Apply filters
-  useEffect(() => {
-    let result = [...properties];
-    
-    // Apply property type filter
-    if (typeFilter !== 'All') {
-      result = result.filter(property => property['Type'] === typeFilter);
     }
     
-    // Apply config filter
-    if (configFilter !== 'All') {
-      result = result.filter(property => property['Config'] === configFilter);
+    // Calculate size data for chart
+    function calculateSizeData() {
+      const sizeByType = {};
+      properties.forEach(property => {
+        if (property['Type'] && property['BUA_Numeric']) {
+          if (!sizeByType[property['Type']]) {
+            sizeByType[property['Type']] = {
+              buaTotal: 0,
+              buaCount: 0,
+              plotTotal: 0,
+              plotCount: 0
+            };
+          }
+          
+          sizeByType[property['Type']].buaTotal += property['BUA_Numeric'];
+          sizeByType[property['Type']].buaCount++;
+          
+          if (property['Plot_Numeric']) {
+            sizeByType[property['Type']].plotTotal += property['Plot_Numeric'];
+            sizeByType[property['Type']].plotCount++;
+          }
+        }
+      });
+      
+      return Object.keys(sizeByType).map(type => ({
+        name: type,
+        avgBUA: Math.round(sizeByType[type].buaTotal / sizeByType[type].buaCount),
+        avgPlot: sizeByType[type].plotCount > 0 ? 
+          Math.round(sizeByType[type].plotTotal / sizeByType[type].plotCount) : 0
+      }));
+    }
+    
+    // Calculate price data for chart
+    function calculatePriceData() {
+      const priceByType = {};
+      properties.forEach(property => {
+        if (property['Type'] && property['Launch_Price_M']) {
+          if (!priceByType[property['Type']]) {
+            priceByType[property['Type']] = {
+              total: 0,
+              count: 0
+            };
+          }
+          
+          priceByType[property['Type']].total += property['Launch_Price_M'];
+          priceByType[property['Type']].count++;
+        }
+      });
+      
+      return Object.keys(priceByType).map(type => ({
+        name: type,
+        price: Math.round(priceByType[type].total / priceByType[type].count * 10) / 10
+      }));
+    }
+    
+    // Calculate scatter plot data
+    function calculateScatterData() {
+      return properties
+        .filter(p => p['BUA_Numeric'] && p['Launch_Price_M'])
+        .map(p => ({
+          name: p['Layout Name'],
+          bua: p['BUA_Numeric'],
+          price: p['Launch_Price_M'],
+          type: p['Type']
+        }));
+    }
+    
+    // Initialize all charts
+    function initializeCharts() {
+      renderSizeChart();
+      renderPriceChart();
+      renderScatterChart();
+      renderSizeRangesChart();
+    }
+    
+    // Render size comparison chart
+    function renderSizeChart() {
+      const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = Recharts;
+      const data = calculateSizeData();
+      
+      const chart = React.createElement(
+        ResponsiveContainer,
+        { width: '100%', height: '100%' },
+        React.createElement(
+          BarChart,
+          { data: data },
+          React.createElement(CartesianGrid, { strokeDasharray: '3 3' }),
+          React.createElement(XAxis, { dataKey: 'name' }),
+          React.createElement(YAxis),
+          React.createElement(Tooltip, { 
+            formatter: (value) => [`${formatNumber(value)} sqft`, ''] 
+          }),
+          React.createElement(Legend),
+          React.createElement(Bar, { 
+            dataKey: 'avgBUA', 
+            name: 'Avg. BUA (sqft)', 
+            fill: '#0088FE' 
+          }),
+          React.createElement(Bar, { 
+            dataKey: 'avgPlot', 
+            name: 'Avg. Plot (sqft)', 
+            fill: '#00C49F' 
+          })
+        )
+      );
+      
+      ReactDOM.render(chart, document.getElementById('size-chart'));
+    }
+    
+    // Render price comparison chart
+    function renderPriceChart() {
+      const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } = Recharts;
+      const data = calculatePriceData();
+      
+      const chart = React.createElement(
+        ResponsiveContainer,
+        { width: '100%', height: '100%' },
+        React.createElement(
+          BarChart,
+          { data: data },
+          React.createElement(CartesianGrid, { strokeDasharray: '3 3' }),
+          React.createElement(XAxis, { dataKey: 'name' }),
+          React.createElement(YAxis),
+          React.createElement(Tooltip, { 
+            formatter: (value) => [`${value}M AED`, ''] 
+          }),
+          React.createElement(Legend),
+          React.createElement(
+            Bar, 
+            { 
+              dataKey: 'price', 
+              name: 'Avg. Launch Price (M AED)', 
+              fill: '#8884d8' 
+            },
+            data.map((entry, index) => 
+              React.createElement(Cell, { 
+                key: `cell-${index}`, 
+                fill: COLORS[index % COLORS.length] 
+              })
+            )
+          )
+        )
+      );
+      
+      ReactDOM.render(chart, document.getElementById('price-chart'));
+    }
+    
+    // Render scatter chart
+    function renderScatterChart() {
+      const { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = Recharts;
+      const data = calculateScatterData();
+      
+      // Get unique property types
+      const types = [...new Set(data.map(item => item.type))];
+      
+      const chart = React.createElement(
+        ResponsiveContainer,
+        { width: '100%', height: '100%' },
+        React.createElement(
+          ScatterChart,
+          { margin: { top: 20, right: 20, bottom: 20, left: 20 } },
+          React.createElement(CartesianGrid),
+          React.createElement(XAxis, { 
+            type: 'number', 
+            dataKey: 'bua', 
+            name: 'Built-Up Area', 
+            unit: ' sqft',
+            label: { value: 'Built-Up Area (sqft)', position: 'insideBottomRight', offset: -10 }
+          }),
+          React.createElement(YAxis, { 
+            type: 'number', 
+            dataKey: 'price', 
+            name: 'Launch Price', 
+            unit: 'M AED',
+            label: { value: 'Launch Price (M AED)', angle: -90, position: 'insideLeft' }
+          }),
+          React.createElement(ZAxis, { range: [100, 100] }),
+          React.createElement(Tooltip, { 
+            cursor: { strokeDasharray: '3 3' },
+            formatter: (value, name) => {
+              if (name === 'bua') return [`${formatNumber(value)} sqft`, 'Built-Up Area'];
+              if (name === 'price') return [`${value}M AED`, 'Launch Price'];
+              return [value, name];
+            }
+          }),
+          React.createElement(Legend),
+          ...types.map((type, index) => 
+            React.createElement(Scatter, { 
+              key: type, 
+              name: type, 
+              data: data.filter(item => item.type === type), 
+              fill: COLORS[index % COLORS.length] 
+            })
+          )
+        )
+      );
+      
+      ReactDOM.render(chart, document.getElementById('scatter-chart'));
+    }
+    
+    // Render size ranges chart
+    function renderSizeRangesChart() {
+      const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = Recharts;
+      
+      const data = filteredProperties
+        .filter(p => p['BUA_Numeric'])
+        .sort((a, b) => a['BUA_Numeric'] - b['BUA_Numeric'])
+        .map(p => ({
+          name: p['Layout Name'].length > 18 
+            ? p['Layout Name'].substring(0, 18) + '...' 
+            : p['Layout Name'],
+          bua: p['BUA_Numeric'],
+          plot: p['Plot_Numeric'] || 0,
+          type: p['Type']
+        }));
+      
+      const chart = React.createElement(
+        ResponsiveContainer,
+        { width: '100%', height: '100%' },
+        React.createElement(
+          BarChart,
+          { 
+            data: data,
+            layout: 'vertical',
+            margin: { top: 5, right: 30, left: 150, bottom: 5 }
+          },
+          React.createElement(CartesianGrid, { strokeDasharray: '3 3' }),
+          React.createElement(XAxis, { type: 'number' }),
+          React.createElement(YAxis, { 
+            type: 'category', 
+            dataKey: 'name', 
+            width: 140,
+            tick: { fontSize: 11 }
+          }),
+          React.createElement(Tooltip, { 
+            formatter: (value, name) => {
+              if (name === 'bua') return [`${formatNumber(value)} sqft`, 'Built-Up Area'];
+              if (name === 'plot') return [`${formatNumber(value)} sqft`, 'Plot Size'];
+              return [value, name];
+            }
+          }),
+          React.createElement(Legend),
+          React.createElement(Bar, { 
+            dataKey: 'bua', 
+            name: 'Built-Up Area (sqft)', 
+            fill: '#0088FE' 
+          }),
+          React.createElement(Bar, { 
+            dataKey: 'plot', 
+            name: 'Plot Size (sqft)', 
+            fill: '#00C49F' 
+          })
+        )
+      );
+      
+      ReactDOM.render(chart, document.getElementById('size-ranges-chart'));
     }
     
     // Apply sorting
-    if (sortConfig.key) {
-      result.sort((a, b) => {
+    function sortProperties() {
+      filteredProperties.sort((a, b) => {
         // Handle numeric sorting
-        if (['BUA_Numeric', 'Plot_Numeric', 'Launch_Price_M', 'BUA_PSF_Numeric', 'Plot_PSF_Numeric'].includes(sortConfig.key)) {
+        if (['BUA_Numeric', 'Plot_Numeric', 'Launch_Price_M', 'BUA_PSF_Numeric'].includes(sortConfig.key)) {
           const aValue = a[sortConfig.key] || 0;
           const bValue = b[sortConfig.key] || 0;
           
@@ -231,340 +552,105 @@ const PalmJebelAliDashboard = () => {
             : bValue.localeCompare(aValue);
         }
       });
+      
+      renderTable();
     }
     
-    setFilteredProperties(result);
-  }, [properties, typeFilter, configFilter, sortConfig]);
-  
-  // Handle sorting
-  const requestSort = (key) => {
-    let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
-    }
-    setSortConfig({ key, direction });
-  };
-  
-  // Format numbers with commas
-  const formatNumber = (num) => {
-    if (num === undefined || num === null || isNaN(num)) return '-';
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  };
-  
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="text-xl font-semibold text-blue-600 mb-4">Loading Palm Jebel Ali Data...</div>
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-        </div>
-      </div>
-    );
-  }
-  
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded max-w-md">
-          <p className="font-bold">Error</p>
-          <p>{error}</p>
-        </div>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="bg-gray-50 min-h-screen">
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto p-4 sm:p-6">
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Average Size by Property Type */}
-          <div className="bg-white rounded-lg shadow p-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Avg. Size by Type</h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sizeComparisonData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`${formatNumber(value)} sqft`, '']} />
-                  <Legend />
-                  <Bar dataKey="avgBUA" name="Avg. BUA (sqft)" fill="#0088FE" />
-                  <Bar dataKey="avgPlot" name="Avg. Plot (sqft)" fill="#00C49F" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+    // Setup sort event listeners
+    function setupSortListeners() {
+      const headers = document.querySelectorAll('th[data-key]');
+      headers.forEach(header => {
+        header.addEventListener('click', () => {
+          const key = header.getAttribute('data-key');
+          let direction = 'ascending';
+          if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+          }
+          sortConfig = { key, direction };
           
-          {/* Average Price by Property Type */}
-          <div className="bg-white rounded-lg shadow p-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Avg. Price by Type</h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={priceComparisonData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`${value}M AED`, '']} />
-                  <Legend />
-                  <Bar dataKey="price" name="Avg. Launch Price (M AED)" fill="#8884d8">
-                    {priceComparisonData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-        
-        {/* BUA vs Price Scatter Plot */}
-        <div className="bg-white rounded-lg shadow p-4 mb-8">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">BUA vs Launch Price</h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart
-                margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-              >
-                <CartesianGrid />
-                <XAxis 
-                  type="number" 
-                  dataKey="bua" 
-                  name="Built-Up Area" 
-                  unit=" sqft"
-                  label={{ value: 'Built-Up Area (sqft)', position: 'insideBottomRight', offset: -10 }}
-                />
-                <YAxis 
-                  type="number" 
-                  dataKey="price" 
-                  name="Launch Price" 
-                  unit="M AED"
-                  label={{ value: 'Launch Price (M AED)', angle: -90, position: 'insideLeft' }}
-                />
-                <ZAxis range={[100, 100]} />
-                <Tooltip 
-                  cursor={{ strokeDasharray: '3 3' }}
-                  formatter={(value, name) => {
-                    if (name === 'Built-Up Area') return [`${formatNumber(value)} sqft`, name];
-                    if (name === 'Launch Price') return [`${value}M AED`, name];
-                    return [value, name];
-                  }}
-                />
-                <Legend />
-                {scatterPlotData
-                  .reduce((types, item) => {
-                    if (!types.includes(item.type)) types.push(item.type);
-                    return types;
-                  }, [])
-                  .map((type, index) => (
-                    <Scatter 
-                      key={type} 
-                      name={type} 
-                      data={scatterPlotData.filter(item => item.type === type)} 
-                      fill={COLORS[index % COLORS.length]} 
-                    />
-                  ))
-                }
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        
-        {/* Property Size Ranges */}
-        <div className="bg-white rounded-lg shadow p-4 mb-8">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Property Size Ranges</h3>
-          <div className="h-96">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={filteredProperties
-                  .filter(p => p['BUA_Numeric'])
-                  .sort((a, b) => a['BUA_Numeric'] - b['BUA_Numeric'])
-                  .map(p => ({
-                    name: p['Layout Name'].length > 18 
-                      ? p['Layout Name'].substring(0, 18) + '...' 
-                      : p['Layout Name'],
-                    bua: p['BUA_Numeric'],
-                    plot: p['Plot_Numeric'] || 0,
-                    type: p['Type']
-                  }))}
-                layout="vertical"
-                margin={{ top: 5, right: 30, left: 150, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
-                <YAxis 
-                  type="category" 
-                  dataKey="name" 
-                  width={140}
-                  tick={{ fontSize: 11 }}
-                />
-                <Tooltip 
-                  formatter={(value, name) => {
-                    if (name === 'bua') return [`${formatNumber(value)} sqft`, 'Built-Up Area'];
-                    if (name === 'plot') return [`${formatNumber(value)} sqft`, 'Plot Size'];
-                    return [value, name];
-                  }}
-                />
-                <Legend />
-                <Bar dataKey="bua" name="Built-Up Area (sqft)" fill="#0088FE" />
-                <Bar dataKey="plot" name="Plot Size (sqft)" fill="#00C49F" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        
-        {/* Properties Data Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden mb-8">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th 
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => requestSort('Layout Name')}
-                  >
-                    <div className="flex items-center">
-                      Layout Name
-                      {sortConfig.key === 'Layout Name' && (
-                        <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
-                      )}
-                    </div>
-                  </th>
-                  <th 
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => requestSort('Type')}
-                  >
-                    <div className="flex items-center">
-                      Type
-                      {sortConfig.key === 'Type' && (
-                        <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
-                      )}
-                    </div>
-                  </th>
-                  <th 
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => requestSort('Config')}
-                  >
-                    <div className="flex items-center">
-                      Config
-                      {sortConfig.key === 'Config' && (
-                        <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
-                      )}
-                    </div>
-                  </th>
-                  <th 
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => requestSort('BUA_Numeric')}
-                  >
-                    <div className="flex items-center">
-                      BUA (sqft)
-                      {sortConfig.key === 'BUA_Numeric' && (
-                        <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
-                      )}
-                    </div>
-                  </th>
-                  <th 
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => requestSort('Plot_Numeric')}
-                  >
-                    <div className="flex items-center">
-                      Plot (sqft)
-                      {sortConfig.key === 'Plot_Numeric' && (
-                        <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
-                      )}
-                    </div>
-                  </th>
-                  <th 
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => requestSort('Launch_Price_M')}
-                  >
-                    <div className="flex items-center">
-                      Launch Price
-                      {sortConfig.key === 'Launch_Price_M' && (
-                        <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
-                      )}
-                    </div>
-                  </th>
-                  <th 
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                    onClick={() => requestSort('BUA_PSF_Numeric')}
-                  >
-                    <div className="flex items-center">
-                      BUA PSF
-                      {sortConfig.key === 'BUA_PSF_Numeric' && (
-                        <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
-                      )}
-                    </div>
-                  </th>
-                  <th 
-                    scope="col"
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    <div className="flex items-center">
-                      Factors
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredProperties.map((property, index) => (
-                  <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-blue-600">{property['Layout Name']}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className={`text-sm ${
-                        property['Type'] === 'Beach Villa' ? 'text-blue-600' : 
-                        property['Type'] === 'Coral Villa' ? 'text-red-600' : 
-                        property['Type'] === 'Plots' ? 'text-green-600' : 'text-gray-900'
-                      }`}>
-                        {property['Type']}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{property['Config']}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatNumber(property['BUA_Numeric'])}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{formatNumber(property['Plot_Numeric'])}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{property['Launched Price (in AED)']}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{property['BUA PSF (in AED Per sqft)']}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{property['Factors']}</div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </main>
+          // Clear all sort indicators
+          headers.forEach(h => {
+            h.innerHTML = h.getAttribute('data-key');
+          });
+          
+          // Add sort indicator
+          header.innerHTML = `${key} ${direction === 'ascending' ? '↑' : '↓'}`;
+          
+          sortProperties();
+        });
+      });
+    }
+    
+    // Render table with sorted properties
+    function renderTable() {
+      const tableBody = document.getElementById('table-body');
+      tableBody.innerHTML = '';
       
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-4">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-sm text-gray-500">
-            Palm Jebel Ali Property Data • March 2025
-          </p>
-        </div>
-      </footer>
-    </div>
-  );
-};
+      filteredProperties.forEach((property, index) => {
+        const row = document.createElement('tr');
+        row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+        
+        // Layout Name
+        const layoutCell = document.createElement('td');
+        layoutCell.className = 'px-6 py-4 whitespace-nowrap';
+        layoutCell.innerHTML = `<div class="text-sm font-medium text-blue-600">${property['Layout Name']}</div>`;
+        row.appendChild(layoutCell);
+        
+        // Type
+        const typeCell = document.createElement('td');
+        typeCell.className = 'px-6 py-4 whitespace-nowrap';
+        
+        let typeClass = 'text-gray-900';
+        if (property['Type'] === 'Beach Villa') typeClass = 'beach-villa';
+        else if (property['Type'] === 'Coral Villa') typeClass = 'coral-villa';
+        else if (property['Type'] === 'Plots') typeClass = 'plots';
+        
+        typeCell.innerHTML = `<div class="text-sm ${typeClass}">${property['Type']}</div>`;
+        row.appendChild(typeCell);
+        
+        // Config
+        const configCell = document.createElement('td');
+        configCell.className = 'px-6 py-4 whitespace-nowrap';
+        configCell.innerHTML = `<div class="text-sm text-gray-900">${property['Config'] || '-'}</div>`;
+        row.appendChild(configCell);
+        
+        // BUA
+        const buaCell = document.createElement('td');
+        buaCell.className = 'px-6 py-4 whitespace-nowrap';
+        buaCell.innerHTML = `<div class="text-sm text-gray-900">${formatNumber(property['BUA_Numeric'])}</div>`;
+        row.appendChild(buaCell);
+        
+        // Plot
+        const plotCell = document.createElement('td');
+        plotCell.className = 'px-6 py-4 whitespace-nowrap';
+        plotCell.innerHTML = `<div class="text-sm text-gray-900">${formatNumber(property['Plot_Numeric'])}</div>`;
+        row.appendChild(plotCell);
+        
+        // Launch Price
+        const priceCell = document.createElement('td');
+        priceCell.className = 'px-6 py-4 whitespace-nowrap';
+        priceCell.innerHTML = `<div class="text-sm text-gray-900">${property['Launched Price (in AED)'] || '-'}</div>`;
+        row.appendChild(priceCell);
+        
+        // BUA PSF
+        const psfCell = document.createElement('td');
+        psfCell.className = 'px-6 py-4 whitespace-nowrap';
+        psfCell.innerHTML = `<div class="text-sm text-gray-900">${property['BUA PSF (in AED Per sqft)'] || '-'}</div>`;
+        row.appendChild(psfCell);
+        
+        // Factors
+        const factorsCell = document.createElement('td');
+        factorsCell.className = 'px-6 py-4 whitespace-nowrap';
+        factorsCell.innerHTML = `<div class="text-sm text-gray-900">${property['Factors'] || '-'}</div>`;
+        row.appendChild(factorsCell);
+        
+        tableBody.appendChild(row);
+      });
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', loadData);
+  </script>
+</body>
+</html>
 
-export default PalmJebelAliDashboard;

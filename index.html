@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Palm Jebel Ali Properties Dashboard</title>
+  
+  <!-- Load PapaParse for CSV parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  
+  <!-- Load Chart.js for visualizations (more reliable than Recharts for direct CDN usage) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f9fafb;
+      margin: 0;
+      padding: 0;
+      color: #111827;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+    
+    .chart-container {
+      background-color: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+    
+    .chart-title {
+      font-size: 1.125rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+      color: #1f2937;
+    }
+    
+    .chart-row {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    @media (min-width: 768px) {
+      .chart-row {
+        flex-direction: row;
+      }
+      
+      .chart-row > div {
+        flex: 1;
+      }
+    }
+    
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 50vh;
+      flex-direction: column;
+    }
+    
+    .spinner {
+      width: 3rem;
+      height: 3rem;
+      border: 4px solid #e5e7eb;
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 1rem;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 2rem;
+    }
+    
+    th {
+      background-color: #f3f4f6;
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #374151;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    
+    th:hover {
+      background-color: #e5e7eb;
+    }
+    
+    td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 0.875rem;
+    }
+    
+    tr:nth-child(even) {
+      background-color: #f9fafb;
+    }
+    
+    .beach-villa {
+      color: #3b82f6; /* blue */
+    }
+    
+    .coral-villa {
+      color: #ef4444; /* red */
+    }
+    
+    .plots {
+      color: #10b981; /* green */
+    }
+    
+    footer {
+      text-align: center;
+      padding: 1rem;
+      background-color: white;
+      border-top: 1px solid #e5e7eb;
+      color: #6b7280;
+      font-size: 0.875rem;
+      margin-top: 2rem;
+    }
+    
+    .error-message {
+      background-color: #fee2e2;
+      border: 1px solid #ef4444;
+      border-radius: 0.375rem;
+      color: #b91c1c;
+      padding: 1rem;
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <div style="font-size: 1.25rem; font-weight: 600; color: #3b82f6;">
+        Loading Palm Jebel Ali Data...
+      </div>
+    </div>
+    
+    <div id="error-message" class="error-message" style="display: none;"></div>
+    
+    <div id="dashboard-content" style="display: none;">
+      <!-- Charts Row -->
+      <div class="chart-row">
+        <!-- Average Size by Property Type -->
+        <div class="chart-container">
+          <h3 class="chart-title">Avg. Size by Type</h3>
+          <canvas id="size-chart" height="250"></canvas>
+        </div>
+        
+        <!-- Average Price by Property Type -->
+        <div class="chart-container">
+          <h3 class="chart-title">Avg. Price by Type</h3>
+          <canvas id="price-chart" height="250"></canvas>
+        </div>
+      </div>
+      
+      <!-- BUA vs Price Scatter Plot -->
+      <div class="chart-container">
+        <h3 class="chart-title">BUA vs Launch Price</h3>
+        <canvas id="scatter-chart" height="300"></canvas>
+      </div>
+      
+      <!-- Property Size Ranges -->
+      <div class="chart-container">
+        <h3 class="chart-title">Property Size Ranges</h3>
+        <canvas id="size-ranges-chart" height="400"></canvas>
+      </div>
+      
+      <!-- Properties Data Table -->
+      <div class="chart-container">
+        <h3 class="chart-title">Properties List</h3>
+        <div style="overflow-x: auto;">
+          <table id="properties-table">
+            <thead>
+              <tr>
+                <th data-sort="Layout Name">Layout Name</th>
+                <th data-sort="Type">Type</th>
+                <th data-sort="Config">Config</th>
+                <th data-sort="BUA_Numeric">BUA (sqft)</th>
+                <th data-sort="Plot_Numeric">Plot (sqft)</th>
+                <th data-sort="Launch_Price_M">Launch Price</th>
+                <th data-sort="BUA_PSF_Numeric">BUA PSF</th>
+                <th>Factors</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <!-- Table rows will be added here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <footer>
+    Palm Jebel Ali Property Data • March 2025
+  </footer>
+  
+  <script>
+    // Global variables
+    let properties = [];
+    let filteredProperties = [];
+    let sortConfig = { key: 'Layout Name', direction: 'ascending' };
+    
+    // Color palette (similar to the React version)
+    const COLORS = {
+      blue: '#3b82f6',
+      green: '#10b981', 
+      yellow: '#f59e0b',
+      red: '#ef4444',
+      purple: '#8b5cf6',
+      cyan: '#06b6d4'
+    };
+    
+    // Chart objects
+    let sizeChart = null;
+    let priceChart = null;
+    let scatterChart = null;
+    let sizeRangesChart = null;
+    
+    // Format numbers with commas
+    function formatNumber(num) {
+      if (num === undefined || num === null || isNaN(num)) return '-';
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+    
+    // Show error message
+    function showError(message) {
+      const errorElement = document.getElementById('error-message');
+      errorElement.textContent = message;
+      errorElement.style.display = 'block';
+      
+      document.getElementById('loading').style.display = 'none';
+    }
+    
+    // Load and process the CSV data
+    async function loadData() {
+      try {
+        // Fetch the CSV file
+        const response = await fetch('Master  PJA Master 1.csv');
+        if (!response.ok) {
+          throw new Error(`Failed to load CSV file: ${response.status} ${response.statusText}`);
+        }
+        
+        const csvText = await response.text();
+        
+        // Parse the CSV
+        Papa.parse(csvText, {
+          header: true,
+          skipEmptyLines: true,
+          complete: function(results) {
+            processData(results.data);
+          },
+          error: function(error) {
+            showError(`CSV parsing error: ${error.message}`);
+          }
+        });
+      } catch (error) {
+        showError(`Data loading error: ${error.message}`);
+      }
+    }
+    
+    // Process the parsed CSV data
+    function processData(data) {
+      try {
+        // Filter out rows without a Type
+        const validProperties = data.filter(row => row['Type'] && row['Type'].trim() !== '');
+        
+        // Clean and process the data
+        properties = validProperties.map(property => {
+          const cleanProperty = { ...property };
+          
+          // Clean BUA (Built-Up Area)
+          if (property['BUA (in sqft)']) {
+            const buaValue = property['BUA (in sqft)'].toString().replace(/,/g, '');
+            cleanProperty['BUA_Numeric'] = parseFloat(buaValue);
+          }
+          
+          // Clean Plot Size
+          if (property['Plot Size (in sqft)']) {
+            let plotValue = property['Plot Size (in sqft)'].toString();
+            if (plotValue.includes('~')) {
+              plotValue = plotValue.replace(/~/g, '').trim();
+            }
+            if (plotValue.includes('-')) {
+              // For ranges, take the average
+              const [min, max] = plotValue.split('-').map(v => parseFloat(v.replace(/,/g, '').trim()));
+              plotValue = (min + max) / 2;
+            } else {
+              plotValue = plotValue.replace(/,/g, '');
+            }
+            cleanProperty['Plot_Numeric'] = parseFloat(plotValue);
+          }
+          
+          // Clean Launch Price
+          if (property['Launched Price (in AED)']) {
+            const price = property['Launched Price (in AED)'].toString();
+            const priceMatch = price.match(/(\d+\.?\d*)M/);
+            if (priceMatch) {
+              cleanProperty['Launch_Price_M'] = parseFloat(priceMatch[1]);
+            } else if (!isNaN(parseFloat(price.replace(/,/g, '')))) {
+              cleanProperty['Launch_Price_M'] = parseFloat(price.replace(/,/g, '')) / 1000000;
+            }
+          }
+          
+          // Clean BUA PSF
+          if (property['BUA PSF (in AED Per sqft)']) {
+            const buaPsf = property['BUA PSF (in AED Per sqft)'].toString();
+            if (buaPsf.includes('-')) {
+              // For ranges, take the average
+              const [min, max] = buaPsf.split('-').map(v => parseFloat(v.replace(/,/g, '').trim()));
+              cleanProperty['BUA_PSF_Numeric'] = (min + max) / 2;
+            } else {
+              const psfValue = buaPsf.replace(/[~,]/g, '').replace(/\s+\(avg\)/g, '');
+              cleanProperty['BUA_PSF_Numeric'] = parseFloat(psfValue);
+            }
+          }
+          
+          return cleanProperty;
+        });
+        
+        // Set filtered properties to all properties initially
+        filteredProperties = [...properties];
+        
+        // Hide loading and show content
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('dashboard-content').style.display = 'block';
+        
+        // Initialize all charts and the table
+        initializeCharts();
+        renderTable();
+        
+        // Set up the sort event listeners
+        setupSortListeners();
+      } catch (error) {
+        showError(`Data processing error: ${error.message}`);
+      }
+    }
+    
+    // Initialize all charts
+    function initializeCharts() {
+      renderSizeChart();
+      renderPriceChart();
+      renderScatterChart();
+      renderSizeRangesChart();
+    }
+    
+    // Render the size comparison chart
+    function renderSizeChart() {
+      // Calculate data for the chart
+      const sizeByType = {};
+      properties.forEach(property => {
+        if (property['Type'] && property['BUA_Numeric']) {
+          if (!sizeByType[property['Type']]) {
+            sizeByType[property['Type']] = {
+              buaTotal: 0,
+              buaCount: 0,
+              plotTotal: 0,
+              plotCount: 0
+            };
+          }
+          
+          sizeByType[property['Type']].buaTotal += property['BUA_Numeric'];
+          sizeByType[property['Type']].buaCount++;
+          
+          if (property['Plot_Numeric']) {
+            sizeByType[property['Type']].plotTotal += property['Plot_Numeric'];
+            sizeByType[property['Type']].plotCount++;
+          }
+        }
+      });
+      
+      const types = Object.keys(sizeByType);
+      const buaValues = types.map(type => 
+        Math.round(sizeByType[type].buaTotal / sizeByType[type].buaCount)
+      );
+      const plotValues = types.map(type => 
+        sizeByType[type].plotCount > 0 ? 
+          Math.round(sizeByType[type].plotTotal / sizeByType[type].plotCount) : 0
+      );
+      
+      // Create the chart
+      const ctx = document.getElementById('size-chart').getContext('2d');
+      
+      if (sizeChart) {
+        sizeChart.destroy();
+      }
+      
+      sizeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: types,
+          datasets: [
+            {
+              label: 'Avg. BUA (sqft)',
+              data: buaValues,
+              backgroundColor: COLORS.blue,
+              borderColor: COLORS.blue,
+              borderWidth: 1
+            },
+            {
+              label: 'Avg. Plot (sqft)',
+              data: plotValues,
+              backgroundColor: COLORS.green,
+              borderColor: COLORS.green,
+              borderWidth: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `${context.dataset.label}: ${formatNumber(context.raw)} sqft`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Square Feet'
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    // Render the price comparison chart
+    function renderPriceChart() {
+      // Calculate data for the chart
+      const priceByType = {};
+      properties.forEach(property => {
+        if (property['Type'] && property['Launch_Price_M']) {
+          if (!priceByType[property['Type']]) {
+            priceByType[property['Type']] = {
+              total: 0,
+              count: 0
+            };
+          }
+          
+          priceByType[property['Type']].total += property['Launch_Price_M'];
+          priceByType[property['Type']].count++;
+        }
+      });
+      
+      const types = Object.keys(priceByType);
+      const priceValues = types.map(type => 
+        Math.round(priceByType[type].total / priceByType[type].count * 10) / 10
+      );
+      
+      // Get color for each type
+      const backgroundColors = types.map((type, index) => {
+        const colorKeys = Object.keys(COLORS);
+        return COLORS[colorKeys[index % colorKeys.length]];
+      });
+      
+      // Create the chart
+      const ctx = document.getElementById('price-chart').getContext('2d');
+      
+      if (priceChart) {
+        priceChart.destroy();
+      }
+      
+      priceChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: types,
+          datasets: [
+            {
+              label: 'Avg. Launch Price (M AED)',
+              data: priceValues,
+              backgroundColor: backgroundColors,
+              borderColor: backgroundColors,
+              borderWidth: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `${context.dataset.label}: ${context.raw} M AED`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Price (M AED)'
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    // Render the scatter chart (BUA vs Price)
+    function renderScatterChart() {
+      // Prepare scatter plot data
+      const scatterData = [];
+      const datasets = {};
+      
+      properties.forEach(property => {
+        if (property['BUA_Numeric'] && property['Launch_Price_M']) {
+          const type = property['Type'];
+          
+          if (!datasets[type]) {
+            // Find a color for this property type
+            const colorKeys = Object.keys(COLORS);
+            const colorIndex = Object.keys(datasets).length % colorKeys.length;
+            const color = COLORS[colorKeys[colorIndex]];
+            
+            datasets[type] = {
+              label: type,
+              data: [],
+              backgroundColor: color,
+              borderColor: color
+            };
+          }
+          
+          datasets[type].data.push({
+            x: property['BUA_Numeric'],
+            y: property['Launch_Price_M']
+          });
+        }
+      });
+      
+      // Create the scatter chart
+      const ctx = document.getElementById('scatter-chart').getContext('2d');
+      
+      if (scatterChart) {
+        scatterChart.destroy();
+      }
+      
+      scatterChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: Object.values(datasets)
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `${context.dataset.label}: ${formatNumber(context.raw.x)} sqft, ${context.raw.y} M AED`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'Built-Up Area (sqft)'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Launch Price (M AED)'
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    // Render the size ranges chart
+    function renderSizeRangesChart() {
+      // Get the filtered properties with BUA data
+      const propertyData = filteredProperties
+        .filter(p => p['BUA_Numeric'])
+        .sort((a, b) => a['BUA_Numeric'] - b['BUA_Numeric'])
+        .map(p => ({
+          name: p['Layout Name'].length > 20 ? p['Layout Name'].substring(0, 20) + '...' : p['Layout Name'],
+          bua: p['BUA_Numeric'],
+          plot: p['Plot_Numeric'] || 0,
+          type: p['Type']
+        }));
+      
+      // Limit to top 15 properties to keep chart readable
+      const limitedData = propertyData.slice(0, 15);
+      
+      // Create datasets
+      const buaData = limitedData.map(p => p.bua);
+      const plotData = limitedData.map(p => p.plot);
+      const labels = limitedData.map(p => p.name);
+      
+      // Create the chart
+      const ctx = document.getElementById('size-ranges-chart').getContext('2d');
+      
+      if (sizeRangesChart) {
+        sizeRangesChart.destroy();
+      }
+      
+      sizeRangesChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Built-Up Area (sqft)',
+              data: buaData,
+              backgroundColor: COLORS.blue,
+              borderColor: COLORS.blue,
+              borderWidth: 1
+            },
+            {
+              label: 'Plot Size (sqft)',
+              data: plotData,
+              backgroundColor: COLORS.green,
+              borderColor: COLORS.green,
+              borderWidth: 1
+            }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `${context.dataset.label}: ${formatNumber(context.raw)} sqft`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Square Feet'
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    // Set up sort event listeners
+    function setupSortListeners() {
+      const headers = document.querySelectorAll('th[data-sort]');
+      headers.forEach(header => {
+        header.addEventListener('click', () => {
+          const key = header.getAttribute('data-sort');
+          let direction = 'ascending';
+          
+          if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+          }
+          
+          sortConfig = { key, direction };
+          
+          // Update arrows on all headers
+          headers.forEach(h => {
+            const sortKey = h.getAttribute('data-sort');
+            if (sortKey === key) {
+              h.innerHTML = `${sortKey} ${direction === 'ascending' ? '↑' : '↓'}`;
+            } else {
+              h.innerHTML = sortKey;
+            }
+          });
+          
+          sortProperties();
+        });
+      });
+    }
+    
+    // Sort properties based on the current sort configuration
+    function sortProperties() {
+      filteredProperties.sort((a, b) => {
+        // Handle numeric sorting
+        if (['BUA_Numeric', 'Plot_Numeric', 'Launch_Price_M', 'BUA_PSF_Numeric'].includes(sortConfig.key)) {
+          const aValue = a[sortConfig.key] || 0;
+          const bValue = b[sortConfig.key] || 0;
+          
+          return sortConfig.direction === 'ascending' 
+            ? aValue - bValue
+            : bValue - aValue;
+        } else {
+          // Handle string sorting
+          const aValue = (a[sortConfig.key] || '').toString();
+          const bValue = (b[sortConfig.key] || '').toString();
+          
+          return sortConfig.direction === 'ascending'
+            ? aValue.localeCompare(bValue)
+            : bValue.localeCompare(aValue);
+        }
+      });
+      
+      renderTable();
+      renderSizeRangesChart(); // Update the size ranges chart based on sorted data
+    }
+    
+    // Render the properties table
+    function renderTable() {
+      const tableBody = document.getElementById('table-body');
+      tableBody.innerHTML = '';
+      
+      filteredProperties.forEach((property, index) => {
+        const row = document.createElement('tr');
+        row.className = index % 2 === 0 ? '' : 'bg-gray-50';
+        
+        // Layout Name
+        const layoutCell = document.createElement('td');
+        layoutCell.innerHTML = `<div style="font-weight: 500; color: #3b82f6;">${property['Layout Name']}</div>`;
+        row.appendChild(layoutCell);
+        
+        // Type
+        const typeCell = document.createElement('td');
+        let typeClass = '';
+        if (property['Type'] === 'Beach Villa') typeClass = 'beach-villa';
+        else if (property['Type'] === 'Coral Villa') typeClass = 'coral-villa';
+        else if (property['Type'] === 'Plots') typeClass = 'plots';
+        
+        typeCell.innerHTML = `<div class="${typeClass}">${property['Type']}</div>`;
+        row.appendChild(typeCell);
+        
+        // Config
+        const configCell = document.createElement('td');
+        configCell.textContent = property['Config'] || '-';
+        row.appendChild(configCell);
+        
+        // BUA
+        const buaCell = document.createElement('td');
+        buaCell.textContent = formatNumber(property['BUA_Numeric']);
+        row.appendChild(buaCell);
+        
+        // Plot
+        const plotCell = document.createElement('td');
+        plotCell.textContent = formatNumber(property['Plot_Numeric']);
+        row.appendChild(plotCell);
+        
+        // Launch Price
+        const priceCell = document.createElement('td');
+        priceCell.textContent = property['Launched Price (in AED)'] || '-';
+        row.appendChild(priceCell);
+        
+        // BUA PSF
+        const psfCell = document.createElement('td');
+        psfCell.textContent = property['BUA PSF (in AED Per sqft)'] || '-';
+        row.appendChild(psfCell);
+        
+        // Factors
+        const factorsCell = document.createElement('td');
+        factorsCell.textContent = property['Factors'] || '-';
+        row.appendChild(factorsCell);
+        
+        tableBody.appendChild(row);
+      });
+    }
+    
+    // Initialize the dashboard
+    document.addEventListener('DOMContentLoaded', loadData);
+  </script>
+</body>
+</html>
